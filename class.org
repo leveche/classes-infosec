@@ -1,1 +1,300 @@
-#+title: Class
+#+title: Enterprise Linux Security Administration
+*** Kerberos
+**** Concepts and Components
+- 'crustacean' model of network security: fortify the perimeter and
+  trust the internal network
+- RFC 1510
+- central trusted server, KDC, that authenticates and issues tickets
+- authentication only, authorization is up to the service
+- principals:
+  - name, e.g. =user/admin@EXAMPLE.ORG=, has 3 components:
+    - primary: =user=. For services, indicates service type,
+      e.g. =host/= or =ldap/=
+    - instance: mandatory for service principals. For users, usually
+      used to modify capabilities given to the principal
+    - realm: =EXAMPLE.ORG=
+- session replay protection
+  - each ticket carries a sequence number
+  - sequence numbers do no roll over in the validity window, usually 5
+    mins
+- Kerberos Components
+  - Authentication Server (AS)
+  - Ticket-Granting Servier (TGS)
+  - kerberized services using KDC
+- GSSAPI
+- SASL
+**** Authentication Process
+#+BEGIN_SRC plantuml :file tmp/krb5_auth_process.png :cache yes
+@startuml
+"Client Workstation" --> "Authentication Server": obtain tgt
+"Authentication Server" --> "Client Workstation": obtain sgt for service 1
+"Client Workstation" --> "Kerberized Service 1": use sgt for service 1
+"Client Workstation" --> "Authentication Server": obtain sgt for service 2
+"Client Workstation" --> "Kerberized Service 2": use sgt for service 2
+@enduml
+#+END_SRC
+**** ticket attributes
+- kerberos version + realm, unencrypted
+- principal of the service, unencrypted
+- principal of the user, unencrypted
+- IP address of client host
+- issued timestamp
+- expiry timestamp
+- session key to encrypt communication between client and service
+**** Authenticators
+encrypted with tgt, opague for the client
+contains
+- Client's principal
+- hash of the ticket
+- timestamp issued
+- sequence number to prevent replay attacks
+**** logging in
+- obtain TGT. Optionally, AS can be set to require a pre-authenticator with the tgt request
+- the pre-authenticator is salt + timestamp encrypted with the principal's password
+- prevents brute-force attacks on krb AS service
+**** TGT request
+- pre-authenticator
+- message type = 10
+- timestamps
+- flags
+- user principal
+**** TGT response
+- message type = 11
+- user principal
+- encrypted with the user principal's key
+  - timestamps
+  - flags
+  - client IP(s)
+  - server TGS principal
+  - session key
+- encrypted with TGS key
+  - TGS principal
+  - timestamps
+  - client IP(s)
+  - user principal
+  - session key
+**** SGT request
+- request body
+  - message type = 12
+  - timestamps
+  - flags
+  - client IP(s)
+  - supported enctypes
+- TGT ticket, encrypted with TGS key
+  - copied verbatim from TGT
+- authenticator, encrypted with session key
+  - user principal
+  - hash of request body
+  - timestamps
+  - sequence number
+**** SGT response
+- message type = 13
+- user principal
+- encrypted with user principal's key
+  - timestamps
+  - flags
+  - client IPs
+  - service principal
+  - sub-session key
+- SGT, encrypted with service's secret key
+  - service principal
+  - timesamps
+  - flags
+  - client IPs
+  - user principal
+  - sub-session key
+**** Service Access Request
+- request body
+  - message type = 14
+  - mutual auth request
+- service ticket: copied from SGT
+- authenticator, encrypted with session sub-key
+  - user principal
+  - hash or request body
+  - timestamps
+  - sequence number
+**** Mutual Authentication Response
+- message type = 15
+- encrypted with session subkey
+  - timestamps
+  - sequence number
+**** Kerberos Components
+- KDC
+  - Authentication Service (AS)
+  - Ticket-Granting Service (TGS)
+- kerbrized services
+  - telnet
+  - ftp
+  - rsh/rlogin/rcp
+  - ssh
+  - ksu
+  - thunderbird
+  - firefox
+  - ssh
+  - printing
+  - imap/pop/smtp
+  - web server
+  - nfs
+  - afs
+**** kerberos setup
+***** KDC
+- krb5kdc
+- kpropd
+- kadmind
+***** utilities
+- master KDC
+  - kdb5_util
+  - kprop
+- admin clients
+  - kadmin
+  - ktutil
+- principal
+  - kinit
+  - pam_krb5
+  - klist
+  - kdestroy
+  - kpasswd
+**** kerberos daemon + utility relationships
+kprop on kdc master -> kpropd on kdc slaves
+kamdin on client -> kadmind on master kdc
+kinit on client  -> krb5kdc on kdc (master or slave)
+**** administering and using kerberos
+***** configuring master KDC
+
+#+BEGIN_EXAMPLE /etc/kdc.conf
+[kdcdefaults]
+kdc_ports = 88
+kdc_tcp_ports = 88
+
+[realms]
+EXAMPLE.COM = {
+  acl_file     = /var/kerberos/krb5kdc/kadm5.acl
+  dict_file    = /usr/share/dict/words
+  admin_keytab = /var/kerberos/krb5kdc/kadm5.keytab
+  supported_enctypes = aes256-cts:normal
+}
+#+END_EXAMPLE
+***** KDC logging
+
+Three types of data to be logged:
+- default
+- kdc: KDC logs
+- admin_server
+
+five possible destinations:
+- FILE:filename: log to file
+- STDERR: log to standard error
+- CONSOLE: log to system console
+- DEVICE=devicename: log to specified device
+- SYSLOG:[severity:facility]: log to syslog
+
+#+BEGIN_EXAMPLE /etc/krb5.conf
+[logging]
+kdc=CONSOLE
+kdc=SYSLOG:NOTICE:DAEMON
+admin_server=FILE:/var/log/kadmin.log
+#+END_EXAMPLE
+
+***** KDC realm defaults
+
+- libdefaults: defaults for all krb libraries
+- appdefaults: defaults for specific client apps
+- realms: realms used by client
+- domain_realm: map DNS domain names -> realm names
+- logging: kerb client logging
+- capaths: x-realm authentications
+
+#+BEGIN_EXAMPLE
+[libdefaults]
+default_realm = EXAMPLE.COM
+dns_lookup_realm = false
+dns_lookup_kdc   = false
+ticket_lifetime  = 24h
+renew_lifetime   = 7d
+forwardable      = yes
+#+END_EXAMPLE
+
+#+BEGIN_EXAMPLE
+[realms]
+EXAMPLE.COM = {
+  kdc = server1.example.com
+  kdc = server2.example.com
+  admin_server = server1.example.com
+}
+#+END_EXAMPLE
+
+***** DNS autoconfig
+#+BEGIN_EXAMPLE
+$ORIGIN example.com
+
+_kerberos              TXT   "EXAMPLE.COM"
+_kerberos._udp         SRV   0 0 88 server1.example.com
+                       SRV   0 0 88 server2.example.com
+_kerberos-master._udp  SRV   0 0 99 server1.example.com
+_kerberos-adm._tcp     SRV   0 0 749 server1.example.com
+_kpasswd._udp          SRV   0 0 464 server1.example.com
+#+END_EXAMPLE
+***** keytabs
+- keytab for =kadmind= on RHEL is in =/var/kerberos/krb5kdc/kadm5/keytab=
+- fetch keys and save in keytabs with MIT kerberos: =kadmin=
+  - =getprinc=, =list_principals=, etc
+- read and modify local keytabs: =ktutil=
+***** ticket types
+- initial: issued directly to principal. non-initial are granted on
+  the basis of another ticket
+- forwardable
+- proxiable: used by services to authenticate on behalf of principals
+- renewable
+- postdatable: validity of tickets starts in the future. used e.g. by
+  cronjobs
+- invalid: used e.g. by postdated tickets before they are valid
+***** managing principals
+attributes
+| allow_forwardable |
+| allow_postdated   |
+| allow_proxiable   |
+| requires_preauth  |
+| requires_hwauth   |
+| allow_svr         |
+| allow_tix         |
+| needschange       |
+***** principal policies
+- maxlife
+- minlife
+- minlife
+- minlength
+- minclasses
+- history
+***** securing workstation login
+use =*K*= in =/etc/shadow= to indicate the principal should
+authenticate via kerberos. e.g. =useradd -p "*K*" user=
+
+on RHEL6, the pam config bypasses obtaining kerberos ticket if unix
+password is set:
+#+BEGIN_EXAMPLE pam_config
+auth sufficient pam_unix.so try_first_pass
+auth sufficient pam_krb5.so use_first_pass
+
+- =ksu= command:
+  - =~/.k5login= lists principals allowed to log in as that user
+  - "kerberized sudo": =~/.k5users= specifies which kerberos principal is allowed to execute specific commands
+#+END_EXAMPLE
+***** forwarding kerberos tickets
+- non-forwardable TGT =kinit -F=
+- =telnet -x= to have telnet try to use krb5. it's the default with
+  newer versions onf telnet
+- =telnet -xF= will forward local credentials to the remote system
+***** securing ssh with kerberos
+#+BEGIN_EXAMPLE
+/etc/ssh/sshd_config
+
+GSSAPIAuthentication yes
+GSSAPICleanupCredentials yes
+
+Host *
+  GSSAPIAuthentication yes
+#+END_EXAMPLE
+
+- =kinit -f=
+- ssh and transfer forwardable credentials: =ssh -o GSSAPIDelegatecredentials=yes targetserver=
+- logout from ssh: =~.=
