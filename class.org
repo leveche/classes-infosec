@@ -176,6 +176,105 @@
     - rootkit
   - cover tracks
     - logsweeps
+*** Password Security and PAM
+- local vs network passwords: =/etc/nsswitch=
+- =/etc/passwd= -> =/etc/shadow=: =pwconv=
+- trapdoor function: hashing
+  - =crypt()=: DES encryption of password with itself as key (?)
+    - weak!
+  - =md5=, =bcrypt=, =sha256=, =sha512=
+- password ageing
+  - =/etc/shadow=: =chage=
+- auditing passwords
+  - John the ripper from openwall project
+    - checkpointing: =session:FILE=, =-restore=
+    - wordlists
+    - Lab: use JTR to audit passwords
+      - install JTR
+      - =john -test=
+      - create new user and set a password
+      - unshadow the password file: =unshadow /etc/{passwd,shadow} > /tmp/passwords=
+      - =john /tmp/passwords=
+      - download wordlist and use it to seed JTR
+        - =john -wordlist:morewords /tmp/passwords=
+      - recompile a new master wordlist on the system
+  - PAM
+    - =/etc/pam.d=
+    - is PAM support linked into the binary?
+       =ldd /usr/sbin/sshd | grep libpam=
+    - PAM Services (module types)
+      - auth
+        - authentication: verify identity, grant group memberships
+      - account
+        - authorization: is the user allowed to use this service at this moment?
+      - password
+        - used for password changes
+      - session
+        - executes code at start/end of a session. E.g. =ulimit=
+    - a given module can provide more than one type:
+      e.g. =pam_unix.so= can be invoked as any of the four types.
+    - program checks its own PAM config file in =/etc/pam.d=, falls back to =other=
+    - =include= statement to reduce code duplication
+    - top-down processing, flow control statements in config
+      - =required=
+        - fails the stack, but processing continues
+      - =requisite=
+        - fails the stack, processing terminates
+      - =sufficient=
+        - passes the stack unless previous module failed it. processing terminates
+      - =optional=
+        - no decision on stack success
+    - module menagery
+      - ls =/lib/security=
+      - =pam_unix=
+        - refers to Name Service Switch to determine auth backend
+        - can e.g. obtain kerberos ticket before session opened
+        - password ageing, session logging
+        - =use_first_pass= vs =try_first_pass=
+      - =pam_pwcheck=
+        - password strength enforcement
+      - =pam_xauth=
+        - transfers =X= cookies e.g. after =su=
+        - =.Xauthority=
+          - =~/.xauth/{import,export}= controls from/to which users
+            this user can share cookies
+      - =pam_tally2=
+        - keep list of failed logins, can lock out
+      - =pam_wheel=
+        - policy on who can =su= to =root=
+      - =pam_nologin=
+        - if =/etc/nologin= exists, no non-root user can login
+      - =pam_deny=
+        - denies everything, secure default to terminate every stack
+      - =pam_warn=
+        - forces logging
+      - =pam_securetty=
+        - forces =root= to login through a 'secure' TTY, as listed in =/etc/securetty=
+      - =pam_time=
+        - enforces policy of which services will allow which users during which times through which ttys
+      - =pam_access=
+        - restricts access based on the location:
+          =/etc/security/access.conf=: =permissions: users: origins=,
+          where =origins= lists TTYs or hostnames
+        - Lab: restrict user access from specified IPs
+          - =/etc/pam.d/sshd=
+            - =account required pam_access.so=
+          - =/etc/security/access.conf=
+            - =-:testuser1:ALL EXCEPT station1.example.com=
+      - =pam_listfile=
+        - arbitrary text files as a source of access control. Specify
+          sense (allow/deny), item: user, tty, rhost, ruser, group,
+          shell
+        - Lab: restrict ssh access to a list of authorized users with
+          =pam_listfile=
+          - =/etc/pam.d/sshd=:
+            - =auth required pam_listfile.so sense=allow item=user file=/etc/ssh_permit=
+      - =pam_lastlog=
+        - display time and location of last login. Taken from
+          =/var/log/lastlog=
+      - =pam_console=
+        - set privileges on local tty differently from remote
+          access. =/etc/security/console.perms=.
 *** Kerberos
 **** Concepts and Components
 - 'crustacean' model of network security: fortify the perimeter and
