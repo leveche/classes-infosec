@@ -1,4 +1,106 @@
 #+title: Enterprise Linux Security Administration
+*** Security Concepts
+- Minimization
+  - every installed component is a security risk, no such thing as
+    innocuous service
+    - every running component doubly so
+      - services are no longer configured to start on boot by install
+        scripts
+  - discovery
+    - packaged software
+      - =rpm -qa=: all packages installed on system
+      - =rpm -qi pkg=: info about package =pkg=
+      - =rpm -ql pkg=: all files provided in package
+      - =rpm -qf file=: which package provided the file
+      - =rpm -qlp pkg.rpm=
+      - lab (~5 mins)
+        - objectives
+          - use =rpm= do discover what packages are installed
+          - trace dependency chain
+        - tasks
+          - list all packages installed
+          - how many are there?
+          - which package does =/usr/bin/openssl= belong to?
+          - what packages require that package as dependencies?
+          - now remove the packages in question
+          - is this it?
+            - =rpm -q --whatrequires $(rpm -q --provides openssl) | sort -u=
+          - are we done now?
+            - what do the packages we removed provide, and what
+              depends on *that*?
+    - unpackaged software
+      - =find /where -user userid -exec rm {} \;=
+      - =-ok= is like =-exec= but asks first
+    - running processes
+      - =chkconfig=
+      - =netstat -taupe=
+      - =ss -taupe=
+      - =ps auxw=
+      - =lsof -i=
+      - lab (~5 minutes)
+        - objectives
+          - identify running processes
+          - disable and uninstall unneeded software
+        - tasks
+          - which processes are configured to start at boot?
+          - disable =avahi=, =bluetooth=, =xinetd= from starting on boot
+          - what is listening on network?
+            - =ss -taupe | grep LISTEN=
+            - =lsof -i=
+          - remove =xinetd= from the system
+            - =rpm -e=
+- Hardening
+  - Already need a picture of who is going to access the service and
+    what level of access they need
+  - Do not trust default config!
+  - Simplify!
+  - packet filtering
+    - pre-firewalld
+      - config persists in =/etc/sysconfig/ip{,6}tables=
+    - firewalld
+  - service wrapping
+    - =xinetd=
+  - Authentication
+    - PAM
+      - shortcomings of PAM
+  - minimizing service capabilities
+    - least-privilege principle
+    - =setuid=
+    - POSIX 1003.1e capabilities
+      - =capability.h=
+      - =libcap=
+        - =sucap=, =execcap=, =getpcaps=, =setpcaps=
+      - lab 10 minutes
+        - objectives
+          - examine use of =capset()= and =setuid()= system calls
+        - tasks
+          - make sure =ntpd= is installed and running
+          - what are the real and effective credentials of the =ntpd= process?
+            - =ps -C ntpd -o comm,pid,ruser,euser,rgroup,egroup=
+            - how does user =ntp= bind to port =tcp 123=, and how can
+              it change system clock?
+          - restart =ntpd= with tracing:
+            - =strace -f ntpd -u ntp:ntp -g 2> ntp-calls &=
+            - =grep -n bind ntp-calls | grep AF_INET=
+            - =grep -n -B 5 capset ntp-calls=
+              - which capabilities does it retain?
+              - how does it change its effective user & group?
+            - =grep -e [UG]id -e ^Cap /proc/$(pgrep ntpd)/status=
+              - look for =Uid, Gid, Cap{Inh,Prm,Eff}=
+    - =chroot=
+      - lab 10 minutes
+        - objectives
+          - examine security implications of =chroot()=
+        - tasks
+          - install =busibox=
+          - copy busibox and bash to =/tmp/jail=
+          - =ldd *=, copy libraries to =/tmp/jail/lib=
+          - =chroot /tmp/jail/bash=
+          - =ls= does not exist!
+          - use commands provided by =busybox=
+          - from outside the jail, run =ls -la /proc/$(pgrep -xf /bash)/{cdw,root}=
+      - SELinux is better!
+        - no need to maintain multiple copies of software
 *** Kerberos
 **** Concepts and Components
 - 'crustacean' model of network security: fortify the perimeter and
