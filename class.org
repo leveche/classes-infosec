@@ -101,6 +101,81 @@
           - from outside the jail, run =ls -la /proc/$(pgrep -xf /bash)/{cdw,root}=
       - SELinux is better!
         - no need to maintain multiple copies of software
+*** Scanning, Probing, and Mapping Vulnerabilities
+- The Security Environment
+  - Reconnaissance
+    - public info
+      - information never dies
+      - profiling from public forums
+      - WHOIS database
+        - admin and technical contacts
+        - netblock maintainer of the IP address
+      - DNS
+        - reverse lookup on target's IP address
+          - why stop at one address? try nearby ones as well!
+        - zone transfers
+          - bulk transfer of all DNS entries in a zone
+            - =host -l example.com=
+    - discovery
+      - =ping=
+      - flood ping =fping=
+      - =nmap=
+        - ping sweep =nmap -sP 192.168.0.0/16=
+          - if ICMP echo is filtered, try ICMP timestamp, or TCP
+            connection to well-known ports
+            - www.iana.org/assignments/port-numbers
+            - /etc/services
+        - IP stack and service fingerprinting
+          - =nmap -sV -O target.example.org=
+        - Lab (30 mins)
+          - objectives
+            - use =nmap= to discover and fingerprint services
+          - tasks
+            - install =wireshark=
+            - ping scan of local network
+              - =nmap -v -sP 192.168.0.0/24=
+            - run ping scan again while running pcap:
+              - =tshark -n=
+              - what is the output?
+            - run TCP connect() scan:
+              - =nmap -sT target=
+                - what flags are set in the scan packet?
+                  - in the response for listening ports?
+                  - closed ports?
+              - decoy hosts
+                - =nmap -sS -D decoy1,decoy2 target=
+                - what will decoys see?
+            - try =-f= option to fragment packets, see tshark output
+            - try null and xmas scans
+      - SNMP
+        - UDP port 161 and 162 (snmptrapd)
+        - =snmpnetstat -v2c -c public -Cr 192.168.32.2=
+          - =-r= requests routing table
+          - =-a= shows all socket info
+        - =snmpwalk -c public -v2c 192.168.32.2=
+      - RPC
+        - portmapper listens on TCP port 111
+        - applications select a free port to listen on, and register
+          themselves with portmapper
+          - =rpcinfo -p target.example.com=
+          - =nmap= can still identify RPC applications even if it
+            can't reach portmapper
+      - enumerating NFS shares
+        - =showmount -e target=
+          - =-e= lists exports, =-a= shows active mounts
+    - Insecurity Scanners
+      - Nessus/ openVAS
+        - NASL, Nessus Attack Vulnerability Language
+          - update rules with =openvas-nvt-sync=
+          - agent/server model
+          - lab?: install openvas, tshark while it's running
+  - Exploit Services
+    - www.securityfocus.com
+  - install backdoor
+    - escalate privileges
+    - rootkit
+  - cover tracks
+    - logsweeps
 *** Kerberos
 **** Concepts and Components
 - 'crustacean' model of network security: fortify the perimeter and
