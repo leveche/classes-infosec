@@ -275,6 +275,49 @@
       - =pam_console=
         - set privileges on local tty differently from remote
           access. =/etc/security/console.perms=.
+*** Securing NTP
+- =hwclock=
+- =date=
+- NTP terms
+  - resolution
+    - smallest interval measurable by clock
+  - precision
+  - jitter
+  - accuracy
+  - frequency error
+  - reliability
+  - wander
+- synchronization services
+  - Digital Time Sync Service (DTSS)
+  - NTP: RFC 958(v0), 1059(v1), 1119(v2), 1305(v3)
+- NTP v4
+  - client-server & broadcast
+    - multicast on 224.0.1.1, ff05::101
+  - server hierarchy
+    - stratum 0,1,2,..15
+- =ntpdate=
+  - slew vs jump update
+- =ntpd=
+  - multicastclient/broadcastclient
+  - =broadcast 244.0.1.1= for multicast
+  - driftfile
+  - panic threshold
+- =ntp.conf=
+  - =restrict ntp1.example.com nomodify=
+    - trust the time from =ntp1= but disallow it from modifying
+      configuration
+  - =restrict 172.16.1.0 mask 255.255.255.0 nomodify noquery=
+- NTP integrity
+  - symmetric encryption support in NTPv3 and v4
+    - =/etc/ntp.conf=:
+      - =keys   /etc/ntp/keys=
+  - NTPv4 also supports 'autokey' (public key) encryption
+    - =/etc/ntp.conf=:
+      - =crypto /path/to/cert /path/to/rsa_key=
+- =ntpq=
+- =ntpc=
+- =ntptrace=
+- =ntpstat=
 *** Kerberos
 **** Concepts and Components
 - 'crustacean' model of network security: fortify the perimeter and
