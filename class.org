@@ -617,3 +617,79 @@ Host *
 - =kinit -f=
 - ssh and transfer forwardable credentials: =ssh -o GSSAPIDelegatecredentials=yes targetserver=
 - logout from ssh: =~.=
+*** Securing the Filesystem
+**** Mount Options
+- =noexec= mount option on user-writable directories. At a minimum,
+  =nosuid=, =nodev= for removable media.
+  - attack vector: create a =suid= =root= binary on a removable media,
+    mount and execute on target system.
+    - Exercise: copy /bin/bash to usb stick and =chmod 6755=
+  - variation (exercise): create a device file referencing the root
+    FS, and escalate through that
+**** NFS
+- similar attack vectors to removeable media: if a user has =root= on
+  an NFS client, they can create =suid root= executables on the mount
+  and try executing them on another machine to escalate.
+- restrict allowable client list in =/etc/exports=
+- root squashing is default: client =uid= 0 is automatically remapped
+  to e.g. =nobody= on the server. Configurable with =anonuid/anongid=
+  options. Can be disabled with =no_root_squash=. =all_squash= can be
+  used to remap all access.
+- =insecure= option allows access from clients bound to high port
+  numbers. Does not really decrease security.
+- Lab: examine mounted filesystems and correct mount options for
+  better security:
+  - e.g. /boot, /tmp, /usr, /var, /dev/shm
+  - verify:
+    - e.g. =mknod -m 777 /var/disk b 3 0= should fail
+- Lab: create and exploit insecure =NFS= export
+  - =/export/insecure 1.0.0.0/1(no_root_squash,rw,sync)= in =/etc/exports=
+  - on a client, mount it and create a root-owned =suid= binary, eg. =vim= or =bash=
+  - then execute the =suid= binary on the server or another client
+- Lab: create a more secure export on the server and show it doesn't
+  allow the =suid= or =mknod= exploit by the client. However, show the
+  *client is still vulnerable to exploit by the server*. Correct mount
+  options on the client to remedy.
+***** NFSv4
+- user names instead of =uid= numbers used by protocol to identify the
+  users. No need to have =uids= match on both client and server.
+- =rpc.statd=, =rpc.mountd=, =rpc.rquotad=, =rpc.lockd= no longer needed
+- /pseudo-root/ exported via =/etc/exports=:
+  =/srv/export  *(rw,fsid=0,no_subtree_check,async)=
+  =fsid=0= (or =fsid=root=) declares the export to be the root of all exported
+  filesystems
+- =GSSAPI= to /mutually/ authenticate server and client to each other
+  - =rpc.idmapd= daemon does the translation on both client and server
+    - =/etc/idmapd.conf=
+  - need =nfs/FQDN@REALM= keys for both client and server
+  - integrity checking and encryption of NFS traffic
+  - =rpc.svcgssd= on the server and =rpc.gssd= on the client
+    - on RHEL, enable via =SECURE_NFS=yes= in =/etc/sysconfig/nfs=
+    - need =prcsec_gss_krb5= kernel module to be loaded
+  - require =GSSAPI= in =/etc/exports=
+    - =/srv/export1  gss/krb5(rw,fsid=0,no_subtree_check,sync)=
+    - =gss/krb5= for host and user auth
+    - =gss/krb5i= to require integrity checking of NFS traffic
+    - =gss/krb5p= to require encryption of all NFS traffic
+  - to mount kerberos-protected exports, use
+    =mount -t nfs4 -osec=krb5p server:/srv/export1 /mnt/=
+- Lab: experiment with NFS and GSSAPI
+  - create an NFSv4 export with 3 subdirectories, each owned by a
+    different user, and =chmod= 700
+    =/srv/export  10.0.0.0/8(fsid=0,rw,no_subtree_check,sync)=
+  - observe that NFSv2/v3 mount of the export should fail
+  - require GSSAPI auth for NFS and restart NFS daemons
+  - require =gss/krb5i= on the export and re-export with =exportfs -r=
+  - try mounting without GSSAPI or without requiring integrity
+    protection: =mount -t nfs4 server:/ /mnt= or =mount -t nfs4 -osec=krb5 server:/ /mnt=
+  - now try mounting with integrity protection:
+    - =mount -t nfs4 -osec=krb5i server:/ /mnt=
+  - try listing directory of a different user: =ls /mnt/userB=
+  - now try creating =userB= on the client and =su= to it:
+    - =su - userB=
+    - =ls /mnt/userB=
+    - should still fail since local =userB= does not possess the
+      required kerberos ticket
+  - now obtain the kerberos ticket as =userB= and access the directory:
+    =kinit userB=
+    =ls -la /mnt/userB=
