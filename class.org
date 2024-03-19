@@ -693,3 +693,32 @@ Host *
   - now obtain the kerberos ticket as =userB= and access the directory:
     =kinit userB=
     =ls -la /mnt/userB=
+***** GPG and openSSL
+- GPG
+  - generate keypair: =gpg --gen-key=
+  - encrypt file: =gpg -e filename=
+  - encrypt with symmetric password: =gpg -c filename=
+  - decrypt (both symmetric and asymmetric): =gpg -d filename=
+  - sign file: =gpg -s filename=
+  - cleartext signature: =gpg --clearsign filename=
+  - verify signature: =gpg --verify filename=
+  - configuration via =~/.gnupg=
+    - =no-greeting=: don't show copyright notice
+    - =defaut-key key1=
+    - =keyserver hkp://subkeys.pgp.net=
+  - =secring.gpg= The secret keyring
+  - =pubring.gpg= public keyring
+  - =trustdb.gpg= the trust database
+  - GPG agent
+    - =gpg-agent --daemon --enable-ssh-support --write-env-file ~/.gpg-agent-info=
+- openSSL
+  - =openssl enc -bf -a -in inputfile -out outputfile=
+    - =-enc=: ecrypt
+    - =-bf=: use BlowFish
+    - =-a=: output =base64= encoded stream
+    - decrypt with =openssl enc -d -bf -a -in inputfile -o outputfile=
+  - network client: =openssl s_client -host www.example.com -port 443=
+- Lab: generate gpg keypair. start gpg-agent. encrypt/decrypt file with gpg.
+- Lab: encrypt and decrypt a file using openssl. Encrypt a tarball,
+  then compress with xz. Repeat with compressing first, then
+  encrypting
