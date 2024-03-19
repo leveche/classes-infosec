@@ -743,3 +743,215 @@ Host *
   - =cryptsetup luksClose /dev/mapper/crypt=
 ***** Extended Attributes and ACLs
 =tune2fs -c 0 -i0 -o acl,user_xattr /dev/vg/lv=
+*** SELinux
+**** DAS vs MAC
+- DAC: discretionary access control, in the sense that a /subject/
+  with certain access permission is able to pass that permission,
+  perhaps indirectly, on to another subject
+- most system resources are represented as files, wich are owned by a
+  user and a group. Permissions are assigned to the files to determine
+  the level of access for the owner, members of the owning group, and
+  others.
+- the owner can grant access at their discretion, and otherwise has
+  full control over the file
+- MAC: mandatory access control; a designated security administrator
+  sets up access policies, based on which the system makes access
+  decisions
+- traditional UNIX security: historically, uid 0 (root) has 'god
+  power' on the system. This means processes running as root typically
+  have more privileges than they need
+- POSIX capabilities carve out specific privileges that can be
+  abrogated by a process to reduce the damage should it become
+  compromised
+- =suid/sgid=: a process is launched with the uid/gid of the /object/
+  (the executable file) rather than the subject (user) who launches
+  it. Classic example: =ping= needs to write IP packets, which is not
+  available via unprivileged TCP/UDP API. Historically, =ping= was
+  =suid= =root= until it was rewritten to use =POSIX= caps
+- processes in the same security context have no limit on interaction:
+  they can send signals to each other, e.g. SIGKILL. Segmenting by
+  uid/gid is often too coarse. E.g. a CGI script launched by a web
+  server will have security context of the web server and thus the
+  same level of access to the system
+**** LSM
+- Linux Security Module, created as a shim between NSA SElinux and the
+  rest of the kernel to give reusable abstraction
+**** AppArmor
+- an LSM (Linux sec module)
+**** SELinux
+- goals: security administrator specifies policy, to be enforced by
+  the kernel
+  - policy allows the expected interactions within the system
+  - original NSA security policy:
+    - control raw access to data
+    - protect integrity of the kernel
+    - protect integrity of system software, system config, system logs
+    - confine damage from exploit on a privileged process
+    - protect privileged processes from executing malicious code
+    - protect admin role and domain from being entered without
+      authentication
+    - prevent user processes from interfering with system processes or
+      admin processes
+    - protect users from exploits in the web browser by malicious code
+- modes
+  - enforcing and permissive
+    - =setenforce 0/1=; =getenforce=, =sestatus=
+- basic information about the state of selinux
+  - =sestatus=, =sestatus -v= will give a list of contexts
+    - =/etc/sestatus.conf=
+- SELinux VFS
+  - =/selinux/enforce=
+  - =/selinux/avc=
+  - =/selinux/booleans=
+  - =/proc/pid/attr/*= - security context of the process
+**** Type Enforcement (TE) Security Model
+- every object (file, process, ...) is assigned a type label. A type
+  applied to a process is called a domain. Security policy defines the
+  allowed interaction between domains and types.
+- TE is the core enforcement model of the RH targeted policy
+- RBAC security model
+  - Users are assigned roles. A mechanism is needed to allow the user
+    to transition between the allowed roles.
+  - SELinux =newrole= command
+  - Traditionally, system privileges are assigned directly to the
+    various roles. With SElunux, each role is assigned a list of
+    domains that may exist in it.
+- Security Context (aka label) consist of 3 components:
+  - identity: the owner of the object. =user_u= is the fallback
+    default identity for UNIX accounts not explicitly mapped to an identity
+  - role: for processes, the domain of the process. For files, a
+    placeholder value =object_r=
+  - type: classification of the object as to its specific security needs
+  - security_level: of the form =sX-sY:cY-cY=
+    - =sX= is the sensitivity level =s0-s15=
+    - =cY= is the (optional) category =c0-c255=
+  - =chcon=, =restorecon=, =/.autorelabel=
+- Policies
+  - RHEL SELinux policies
+    - targeted policy: =unconfined_t=, =kernel_t=, =initrc_t=
+      unrestricted domains
+    - MLS policy: based on security levels and categories. LSPP, RBAC,
+      and CAPP certification at EAL 4+. Mostly used in military or
+      government deployments
+    - Minimum policy: subset of the targeted policy
+    - reference policy: original policy from NSA. Now by Tresys
+      Technology
+  - switching policies
+    - =/etc/selinux/config=: =SELINUXTYPE=mls/minimum/targeted=
+  - Policy Config Files
+    - policy source, single binary policy (policy.XX), modular binary
+      policy files (application.pp)
+    - =/etc/selinux/=
+      - =srtict=
+        - =contexts=
+        - =modules=
+          - =active=
+            - =modules=
+              - =app1.pp=
+              - =app2.pp=
+          - =policy/policy.24=
+      - =targeted=
+        - =contexts=
+        - ...
+    - =apol= tool
+- Booleans: toggle certain SELinux rules
+  - =man -k _selinux= -> ... =httpd_selinux (8)=
+  - visible in =/selinux/booleans=. Also =getsebool=. Also =semanage
+    boolean -l=
+  - changing in two stages: set and commit
+    - via =echo 1 > /selinux/commit_pending_bools=
+    - also =togglesebool= and =setsebool=. persistent with =-P=
+  - =disable_trans= booleans
+    - selectively disable transition to a confined
+      domain. e.g. =httpd_disable_trans= keeps Apache running in
+      =initrc_t= domain rather than transition to =httpd_t=. Caveat:
+      files created by the service would be mislabelled. Not
+      recommended.
+- Permissive Domains
+  - disable policy enforcement for a specific domain. The rest of the
+    system is still protected by SELinux.
+  - =semanage permissive -a <domain>=
+  - =semodule -l | grep permissive=
+  - restore confinement: =semanage permissive -d <domain>=
+- Managing File Contexts
+  - default context associates with every file
+    - =semanage fcontext -l= lists the mappings of regexps matching on
+      file path + file type to context
+    - =semanage fcontext -a= to add a mapping:
+      - =semanage fcontext -a -t httpd_sys_content_t '/myweb(/.*)?'=
+- Managing port contexts
+  - =semanage port -l=
+- Lab: apply incorrect context to httpd document root
+  - observe HTTP 403 error, and AVC error messages in the audit log
+  - restore context
+- Lab: toggle httpd_enable_cgi to off
+  - install a simple cgi script, observe it run from command line
+  - observe http 403 error and apache error log
+  - =aureport --avc --failed -ts recent= to get report numbers
+  - =ausearch -a report_number=
+  - =sesearch --allow -s httpd_t -t httpd_sys_script_exec_t -p getattr -C=
+  - toggle sebool back to on and observe CGI script run
+**** Examining Policy
+  - =seinfo=
+  - =sesearch= to display policy statements matching a search
+    - =sesearch -A -s httpd_t= will list all AV rules involving =httpd_t=
+    - =sesearch -A -s httpd_t -c file -p read -C= all files =httpd_t= can read
+    - =sesearch -A -t shadow_t -c file -p write -C=
+    - =sesearch -b allow_httpd_anon_write -A -C= what does =allow_httpd_anon_write= enable?
+    - =sesearch -A -s httpd_t -c tcp_socket -p name_bind -C=  what ports can =httpd_t= bind to?
+**** SELinux Troubleshooting
+- =auditd= is your friend: =/var/log/audit/audit.log=
+- some denials are not logged due to =dontaudit= policy
+  statements. Override with =semodule -DB= =semodule -b /usr/share/selinux/targeted/enableaudit.pp=
+  - return to normal with =semodule -B= =semodule -b /usr/share/selinux/targeted/base.pp=
+- =setroubleshootd=
+- =sealert=
+- fix file contexts with =chcon= or =restorecon=
+- directories that need to be used by multiple services:
+  =public_content_t=, =public_content_rw_t=
+- allow service to bind to alternative port with =semanage port -a -t httpd_port_t -p tcp 8080=
+**** audit2allow
+Lab: create x509 certificate for dovecot with wrong type,
+e.g. =httpd_sys_content_t=.
+- =tail /var/log/audit/audit.log=
+- copy denial messages from audit.log and feed them to =audit2allow=
+  =audit2allow -M dovecotextra < dovecot_failures.log=
+- =semodule -i dovecotextra.pp=
+- examine the type enforcement (.te) produced by =audit2allow=
+  #+BEGIN_EXAMPLE
+  module dovecotextra 1.0;
+  require {
+    type postfix_etc_t;
+    type httpd_sys_content_t;
+    class file read;
+  }
+  allow dovecot_t httpd_sys_content_t:file read;
+  #+END_EXAMPLE
+- =semodule -l | grep dovecotextra=
+- cleanup: =semodule -r dovecotextra=
+- proper fix: =chcon -t cert_t /path/to/x509/cert=
+**** Creating and Compiling policy from source
+create policy module
+#+BEGIN_EXAMPLE
+policy_module(mypostfix_dovecot, 1.0)
+
+gen_require('
+  type postfix_t, dovecot_t;
+')
+type postfix_dovecot_cert_t;
+files_type(postfix_dovecot_cert_t)
+
+read_files_pattern(postfix_t, postfix_dovecot_cert_t, postfix_dovecot_cert_t)
+read_files_pattern(dovecot_t, postfix_dovecot_cert_t, postfix_dovecot_cert_t)
+#+END_EXAMPLE
+
+create new file contexts file to make relabelling easier:
+
+#+BEGIN_EXAMPLE
+/etc/pki/tls/certs/*/email.*    gen_context(system_u:object:r:postfix_dovecot_cert_t,s0)
+/etc/pki/dovecot/*/email.*    gen_context(system_u:object:r:postfix_dovecot_cert_t,s0)
+#+END_EXAMPLE
+
+=semodule -i mypostfix.pp=
+=semodule -l | grep mypostfix=
+=restorecon -v /etc/pki/dovecot/*/email.pem=
