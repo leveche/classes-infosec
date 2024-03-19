@@ -722,3 +722,24 @@ Host *
 - Lab: encrypt and decrypt a file using openssl. Encrypt a tarball,
   then compress with xz. Repeat with compressing first, then
   encrypting
+***** encfs
+- implemented on top of =FUSE=
+- =encfs ~/.encrypted_backend ~/decrypted=
+- encrypts individual files, not block devices
+- encfs backend can be shared by different users, each of whom will
+  only see the files encrypted by their own password
+***** LUKS
+- implemented on top of device-mapper
+  - see =dm-crypt= and =dm-mod= kernel modules
+  - =cryptsetup= porcelain layer on top of =dmsetup=
+- =cryptsetup --verify-passphrase luksFormat /dev/vg/lv_encrypted=
+- =cryptsetup luksOpen /dev/vg/lv_encrypted crypt=
+  - will create a =dm= block device =crypt=
+  - =mkfs.ext4 -L crypt /dev/mapper/crypt=
+- prompt decrypt on mount:
+  - =crypt /dev/vg/lv_encrypted= in =/etc/crypttab=
+  - =/dev/mapper/crypt   /path/to/mountpoint   ext4   defaults 1 2= in =/etc/fstab=
+- Lab: create and format a LUKS filesystem. Set up multiple keys to access it
+  - =cryptsetup luksClose /dev/mapper/crypt=
+***** Extended Attributes and ACLs
+=tune2fs -c 0 -i0 -o acl,user_xattr /dev/vg/lv=
