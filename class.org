@@ -1133,3 +1133,239 @@ create new file contexts file to make relabelling easier:
       =auditctl -a exit,always -F uid=1000 -S execve=
     - `match unlink syscall to filter deletions
       =auditctl -a exit,always -F uid=1000 -S unlink,unlinkat=
+*** Securing postgres
+**** SSL
+- generate SSL keypair, sign the certificate.
+- place the certificate in =/var/lib/pgsql/data=
+- set =ssl = on= in =postgresql.conf=
+- force connections to use SSL in =pg_hba.conf=
+- Lab: set up SSL for pgsql
+  - generate key and req
+    - =openssl genrsa -out pgsql.key 4096=
+    - =openssl req -new -key pgsql.key -x509 -out server.crt=
+  - enable ssl in =postgresql.conf=
+  - restart pgsql
+  - connect with =psql=
+  - adjust SSL connection parameters: ciphers etc
+  - disallow plain text connections in =pg_hba.conf=
+**** Access controls
+- by default, no network connections allowed, so must be enabled with
+  =listen_addresses = <list of ip addresses>= in =postgresql.conf=
+- =pg_hba= by default restricts access to local users: user can
+  connect only if they have an entry in =/etc/passwd= with the same
+  name, and only connect to the database of the same name as the user
+- =pg_ident= can override the default by mapping sql user name to UNIX
+  users allowed to connect with that name
+- =hba.conf= parameters
+  - conn type:
+    - local: UNIX socket
+    - host:  tcp socket (default 5432)
+    - hostssl: tcp socket with SSL enabled
+  - auth_type
+    - trust: bypass authentication
+    - password: cleartext passwords (possibly in SSL tunnel)
+      - passwords are stored in =pg_shadow= table
+      - =CREATE USER bob WITH PASSWORD 'alice';=
+      - if =WITH PASSWORD= is omitted, password is =NULL= and
+        authentication will always fail for bob
+    - md5:
+    - ident:
+      - locally: system username that connects on the UNIX socket
+      - with host or hostssl: will trust reply from =identd= on the
+        client machine. RFC1413. Not recommended.
+    - krb5: GSSAPI
+    - reject: what it says
+    - ldap: passthrough to LDAP
+- PAM for authentication
+  - will passtrhough authentication to PAM. Highly configurable.
+  - default service name =postgresql=, can be overridden
+- GSSAPI
+  - create service principal =postgres/host@REALM=
+  - realm is ignored by postgres - careful of accepting principal from
+    other realms in case of X-realm auth
+  - configure =krb_server_keyfile= parameter in =postgresql.conf=
+  - Lab: krb authentication
+    - prepare keytab and require krb auth in =pg_hba.conf=:
+      - =hostssl ALL ALL ALL ALL krb5=
+    - reload postgres, and connect with =pgsql=
+**** Lab: pgsql as web app backing store
+- =setsebool -P httpd_can_network_connect_db=1=
+- set up the database, dedicated user, password, and entry in =pg_hba.conf=
+*** Securing mail with GSSAPI
+- postfix
+  - crate =smtp= principal and add to keytab
+    - if postfix is running chrooted, make sure the keytab is the
+      appropriate one, such as =/var/spool/postfix/etc/krb5.keytab=
+    - also, if chrooted, create a tmp directory for krb session
+      caches, and chmod 1777
+    - if not chrooted, set =KRB5_KTNAME= to point to postfix' keytab,
+      and import it in =main.cf=: =import_environment = KRB5_KTBANE=/etc/postfix/krb5.keytab=
+    - also if chrooted, make sure SELinux allows =saslauthd= access to the socket:
+      - =semanage fcontext -a -t saslauthd_var_run_t "/var/spool/postfix/var/run/saslauthd(/.*)?"=
+      - =chcon -t var_run_t /var/spool/postfix/var/run=
+      - =chcon -t saslauthd_var_run_t /var/spool/postfix/var/run/saslauthd=
+  - configure =SASL= library to use GSSAPI:
+    =mech_list: GSSAPI= in =/etc/sasl2/smtpd.conf=
+- Cyrus IMAP
+  - create principal =imap/FQDN@REALM=
+  - add =sasl_keytab: /etc/imap/krb5.keytab= and =sasl_mech_list:
+    GSSAPI= to =/etc/imapd.conf=
+*** Securing Apache
+- =httpd.conf=
+  =AddHandler= to allow executing CGI programs
+  Allow CGI in directories with =ExecCGI= option, e.g.
+  #+BEGIN_EXAMPLE
+  <Directory /home/*/public_html>
+    Options MultiViews Indexes IncludesNoExec ExecCGI
+  </Directory>
+  #+END_EXAMPLE
+- File ownership & permissions
+  - web content should *not* be owned by apache user/group (usually
+    =nobody/nogroup=), nor should it be writable by them. Create a
+    dedicated user & group, e.g. =webmaster=
+- configuring CGI
+  - always validate input to CGI scripts
+    - perl: use taint mode =perl -t=. Untaints variables when regex is
+      applied
+  - =suexec=
+    check restrictions with =suexec -V=
+- Minimizing Attack Surface
+  - deactivate unused modules, such as =cgi_module= or
+    =userdir_module=
+- delegating admin
+  - =AllowOverride= directive within =<Directory/>=
+    section. =AccessFileName= specifies which file is used for the
+    override directives. Usually =.htaccess=
+  - Limit scope of =AllowOverride=:
+    - =AuthConfig=: auth directives; =AuthType=, =Require=, etc
+    - =FileInfo=: document types such as =DefaultType=,
+      =ErrorDocument=, etc
+    - =Indexes=: index controls such as =DirectoryIndex=, =AddIcon= etc
+    - =Limit=: =Allow=, =Deny=, =Order=
+    - =Options=: specific directory features =Options= and =XBitTrack=
+    - =All/None=
+  - Examples
+    #+BEGIN_EXAMPLE
+    <Directory "/var/www/html">
+      Options Indexes FollowSymLinks ExecCGI
+      AllowOverride None
+      Order allow,deny
+      Allow from all
+    </Directory>
+    #+END_EXAMPLE
+
+    Mask access to any file starting with ".ht"
+    #+BEGIN_EXAMPLE
+    <Files ~ "^\.ht">
+      Order allow,deny
+      Deny from all
+      Satisfy All
+    </Files>
+    #+END_EXAMPLE
+
+    #+BEGIN_EXAMPLE
+    <Directory /home/*/public_html>
+      AllowOverride FileInfo AuthConfig Limit
+      Options MultiViews Indexes SymLinksIfOwnerMatch IncludesNoExec ExecCGI
+      <Limit GET POST OPTIONS PROPFIND>
+        Order allow,deny
+        Allow from all
+      </Limit>
+      <LimitExcept GET POST OPTIONS PROPFIND>
+        Order allow,deny
+        Deny from all
+      </LimitExcept>
+    </Directory>
+    #+END_EXAMPLE
+- scrubbing HTTP headers
+  - =ServerTokens=
+    #+BEGIN_EXAMPLE
+    ServerTokens Prod
+    ServerSignature Off
+    #+END_EXAMPLE
+    =curl -Is http://localhost | grep Server
+  - =expose_php= in =php.ini
+- metering HTTP bandwidth
+  - =mod_bandwidth=, =mod_bw.conf=
+    #+BEGIN_EXAMPLE
+    BandWidthModule On
+    <Directory /srv/www/foo>
+      BandWidth example 0
+      BandWidth 10.100.0.0/24 0
+      BandWidth all 1024
+    </Directory>
+    #+END_EXAMPLE
+- HTTP User Authentication
+  - http basic auth
+    #+BEGIN_EXAMPLE
+    AuthType Basic
+    AuthName "Protected"
+    AuthUserFile /home/user/.htpasswd
+    Require user user1 user2
+    #+END_EXAMPLE
+  - standard auth modules
+    - =mod_authn_dbm=
+      Use =htdbm= utility to store usernames/passwords
+      #+BEGIN_EXAMPLE
+      AuthName "Protected"
+      AuthType Basic
+      AuthDBUserFile /home/user/webusers.db
+      Require user1 user2
+      #+END_EXAMPLE
+    - Authenticating via SQL
+      - generic SQL auth: =mod_authn_dbd=. Supports freeTDS, oracle,
+        mysql, postgresql, sqlite, odbc
+        #+BEGIN_EXAMPLE
+        DBDriver pgsql
+        DBDParams "dbname=www user=webauth password=secret"
+
+        AuthName "Protected"
+        AuthType basic
+        AuthBasicProvider dbd
+        AuthDBUserPWQuery "SELECT passsword from users where username = %s"
+
+        Require valid-user
+        #+END_EXAMPLE
+
+        Where the database table is defines similar to
+        #+BEGIN_EXAMPLE
+        create table users ( username char(128) NOT NULL, password char(128);
+        #+END_EXAMPLE
+
+      - Also: =mod_authn_mysql=,  =mod_authn_pgsql=
+    - Authentication via LDAP
+      - =mod_authnz_ldap= module. Need RFC2307 schema.
+        #+BEGIN_EXAMPLE
+        <Directory /var/www/html/>
+          AuthLDAPUrl ldap://ldap.example.com/ou=people,dc=example,dc=com???
+          AuthType Basic
+          AuthName "Restricted"
+          Require valid-user
+        </Directory>
+        #+END_EXAMPLE
+    - Authentication via Kerberos
+      - =mod_auth_kerb= module
+        - methods
+          - password (passthrough)
+          - negotiate method: uses tickets
+        - =http/www.example.com= service principal
+        - Needs SSL to prevent replay attacks
+        - example config
+          #+BEGIN_EXAMPLE
+          SSLRequireSSL
+          AuthType Kerberos
+          AuthName "Restricted"
+          KrbMethodNegotiate On
+          KrbMethodK5Password Off
+          KrbAuthRealms EXAMPLE.COM
+          KrbKeyTab /etc/apache.keytab
+          require valid-user
+          #+END_EXAMPLE
+      - enable krb authentication in Firefox
+        - =about:config= or edit =prefs.js=
+          - =network.negotiate-auth.trusted-uris= <- ='example.com'=
+*** HIDS
+- rpm
+=rpm -Va=
+=rpm -V package_name=
+- AIDE
