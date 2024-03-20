@@ -1,5 +1,5 @@
 #+title: Enterprise Linux Security Administration
-*** Security Concepts
+* Security Concepts
 - Minimization
   - every installed component is a security risk, no such thing as
     innocuous service
@@ -101,7 +101,7 @@
           - from outside the jail, run =ls -la /proc/$(pgrep -xf /bash)/{cdw,root}=
       - SELinux is better!
         - no need to maintain multiple copies of software
-*** Scanning, Probing, and Mapping Vulnerabilities
+* Scanning, Probing, and Mapping Vulnerabilities
 - The Security Environment
   - Reconnaissance
     - public info
@@ -176,7 +176,7 @@
     - rootkit
   - cover tracks
     - logsweeps
-*** Password Security and PAM
+* Password Security and PAM
 - local vs network passwords: =/etc/nsswitch=
 - =/etc/passwd= -> =/etc/shadow=: =pwconv=
 - trapdoor function: hashing
@@ -275,7 +275,7 @@
       - =pam_console=
         - set privileges on local tty differently from remote
           access. =/etc/security/console.perms=.
-*** Securing NTP
+* Securing NTP
 - =hwclock=
 - =date=
 - NTP terms
@@ -318,8 +318,8 @@
 - =ntpc=
 - =ntptrace=
 - =ntpstat=
-*** Kerberos
-**** Concepts and Components
+* Kerberos
+** Concepts and Components
 - 'crustacean' model of network security: fortify the perimeter and
   trust the internal network
 - RFC 1510
@@ -342,7 +342,7 @@
   - kerberized services using KDC
 - GSSAPI
 - SASL
-**** Authentication Process
+** Authentication Process
 #+BEGIN_SRC plantuml :file tmp/krb5_auth_process.png :cache yes
 @startuml
 "Client Workstation" --> "Authentication Server": obtain tgt
@@ -352,7 +352,7 @@
 "Client Workstation" --> "Kerberized Service 2": use sgt for service 2
 @enduml
 #+END_SRC
-**** ticket attributes
+** ticket attributes
 - kerberos version + realm, unencrypted
 - principal of the service, unencrypted
 - principal of the user, unencrypted
@@ -360,24 +360,24 @@
 - issued timestamp
 - expiry timestamp
 - session key to encrypt communication between client and service
-**** Authenticators
+** Authenticators
 encrypted with tgt, opague for the client
 contains
 - Client's principal
 - hash of the ticket
 - timestamp issued
 - sequence number to prevent replay attacks
-**** logging in
+** logging in
 - obtain TGT. Optionally, AS can be set to require a pre-authenticator with the tgt request
 - the pre-authenticator is salt + timestamp encrypted with the principal's password
 - prevents brute-force attacks on krb AS service
-**** TGT request
+** TGT request
 - pre-authenticator
 - message type = 10
 - timestamps
 - flags
 - user principal
-**** TGT response
+** TGT response
 - message type = 11
 - user principal
 - encrypted with the user principal's key
@@ -392,7 +392,7 @@ contains
   - client IP(s)
   - user principal
   - session key
-**** SGT request
+** SGT request
 - request body
   - message type = 12
   - timestamps
@@ -406,7 +406,7 @@ contains
   - hash of request body
   - timestamps
   - sequence number
-**** SGT response
+** SGT response
 - message type = 13
 - user principal
 - encrypted with user principal's key
@@ -422,7 +422,7 @@ contains
   - client IPs
   - user principal
   - sub-session key
-**** Service Access Request
+** Service Access Request
 - request body
   - message type = 14
   - mutual auth request
@@ -432,12 +432,12 @@ contains
   - hash or request body
   - timestamps
   - sequence number
-**** Mutual Authentication Response
+** Mutual Authentication Response
 - message type = 15
 - encrypted with session subkey
   - timestamps
   - sequence number
-**** Kerberos Components
+** Kerberos Components
 - KDC
   - Authentication Service (AS)
   - Ticket-Granting Service (TGS)
@@ -455,12 +455,12 @@ contains
   - web server
   - nfs
   - afs
-**** kerberos setup
-***** KDC
+** kerberos setup
+*** KDC
 - krb5kdc
 - kpropd
 - kadmind
-***** utilities
+*** utilities
 - master KDC
   - kdb5_util
   - kprop
@@ -473,12 +473,12 @@ contains
   - klist
   - kdestroy
   - kpasswd
-**** kerberos daemon + utility relationships
+** kerberos daemon + utility relationships
 kprop on kdc master -> kpropd on kdc slaves
 kamdin on client -> kadmind on master kdc
 kinit on client  -> krb5kdc on kdc (master or slave)
-**** administering and using kerberos
-***** configuring master KDC
+** administering and using kerberos
+*** configuring master KDC
 
 #+BEGIN_EXAMPLE /etc/kdc.conf
 [kdcdefaults]
@@ -493,7 +493,7 @@ EXAMPLE.COM = {
   supported_enctypes = aes256-cts:normal
 }
 #+END_EXAMPLE
-***** KDC logging
+*** KDC logging
 
 Three types of data to be logged:
 - default
@@ -514,7 +514,7 @@ kdc=SYSLOG:NOTICE:DAEMON
 admin_server=FILE:/var/log/kadmin.log
 #+END_EXAMPLE
 
-***** KDC realm defaults
+*** KDC realm defaults
 
 - libdefaults: defaults for all krb libraries
 - appdefaults: defaults for specific client apps
@@ -542,7 +542,7 @@ EXAMPLE.COM = {
 }
 #+END_EXAMPLE
 
-***** DNS autoconfig
+*** DNS autoconfig
 #+BEGIN_EXAMPLE
 $ORIGIN example.com
 
@@ -553,12 +553,12 @@ _kerberos-master._udp  SRV   0 0 99 server1.example.com
 _kerberos-adm._tcp     SRV   0 0 749 server1.example.com
 _kpasswd._udp          SRV   0 0 464 server1.example.com
 #+END_EXAMPLE
-***** keytabs
+*** keytabs
 - keytab for =kadmind= on RHEL is in =/var/kerberos/krb5kdc/kadm5/keytab=
 - fetch keys and save in keytabs with MIT kerberos: =kadmin=
   - =getprinc=, =list_principals=, etc
 - read and modify local keytabs: =ktutil=
-***** ticket types
+*** ticket types
 - initial: issued directly to principal. non-initial are granted on
   the basis of another ticket
 - forwardable
@@ -567,7 +567,7 @@ _kpasswd._udp          SRV   0 0 464 server1.example.com
 - postdatable: validity of tickets starts in the future. used e.g. by
   cronjobs
 - invalid: used e.g. by postdated tickets before they are valid
-***** managing principals
+*** managing principals
 attributes
 | allow_forwardable |
 | allow_postdated   |
@@ -577,14 +577,14 @@ attributes
 | allow_svr         |
 | allow_tix         |
 | needschange       |
-***** principal policies
+*** principal policies
 - maxlife
 - minlife
 - minlife
 - minlength
 - minclasses
 - history
-***** securing workstation login
+*** securing workstation login
 use =*K*= in =/etc/shadow= to indicate the principal should
 authenticate via kerberos. e.g. =useradd -p "*K*" user=
 
@@ -598,12 +598,12 @@ auth sufficient pam_krb5.so use_first_pass
   - =~/.k5login= lists principals allowed to log in as that user
   - "kerberized sudo": =~/.k5users= specifies which kerberos principal is allowed to execute specific commands
 #+END_EXAMPLE
-***** forwarding kerberos tickets
+*** forwarding kerberos tickets
 - non-forwardable TGT =kinit -F=
 - =telnet -x= to have telnet try to use krb5. it's the default with
   newer versions onf telnet
 - =telnet -xF= will forward local credentials to the remote system
-***** securing ssh with kerberos
+*** securing ssh with kerberos
 #+BEGIN_EXAMPLE
 /etc/ssh/sshd_config
 
@@ -617,8 +617,8 @@ Host *
 - =kinit -f=
 - ssh and transfer forwardable credentials: =ssh -o GSSAPIDelegatecredentials=yes targetserver=
 - logout from ssh: =~.=
-*** Securing the Filesystem
-**** Mount Options
+* Securing the Filesystem
+** Mount Options
 - =noexec= mount option on user-writable directories. At a minimum,
   =nosuid=, =nodev= for removable media.
   - attack vector: create a =suid= =root= binary on a removable media,
@@ -626,7 +626,7 @@ Host *
     - Exercise: copy /bin/bash to usb stick and =chmod 6755=
   - variation (exercise): create a device file referencing the root
     FS, and escalate through that
-**** NFS
+** NFS
 - similar attack vectors to removeable media: if a user has =root= on
   an NFS client, they can create =suid root= executables on the mount
   and try executing them on another machine to escalate.
@@ -650,7 +650,7 @@ Host *
   allow the =suid= or =mknod= exploit by the client. However, show the
   *client is still vulnerable to exploit by the server*. Correct mount
   options on the client to remedy.
-***** NFSv4
+*** NFSv4
 - user names instead of =uid= numbers used by protocol to identify the
   users. No need to have =uids= match on both client and server.
 - =rpc.statd=, =rpc.mountd=, =rpc.rquotad=, =rpc.lockd= no longer needed
@@ -693,7 +693,7 @@ Host *
   - now obtain the kerberos ticket as =userB= and access the directory:
     =kinit userB=
     =ls -la /mnt/userB=
-***** GPG and openSSL
+*** GPG and openSSL
 - GPG
   - generate keypair: =gpg --gen-key=
   - encrypt file: =gpg -e filename=
@@ -722,13 +722,13 @@ Host *
 - Lab: encrypt and decrypt a file using openssl. Encrypt a tarball,
   then compress with xz. Repeat with compressing first, then
   encrypting
-***** encfs
+*** encfs
 - implemented on top of =FUSE=
 - =encfs ~/.encrypted_backend ~/decrypted=
 - encrypts individual files, not block devices
 - encfs backend can be shared by different users, each of whom will
   only see the files encrypted by their own password
-***** LUKS
+*** LUKS
 - implemented on top of device-mapper
   - see =dm-crypt= and =dm-mod= kernel modules
   - =cryptsetup= porcelain layer on top of =dmsetup=
@@ -741,10 +741,10 @@ Host *
   - =/dev/mapper/crypt   /path/to/mountpoint   ext4   defaults 1 2= in =/etc/fstab=
 - Lab: create and format a LUKS filesystem. Set up multiple keys to access it
   - =cryptsetup luksClose /dev/mapper/crypt=
-***** Extended Attributes and ACLs
+*** Extended Attributes and ACLs
 =tune2fs -c 0 -i0 -o acl,user_xattr /dev/vg/lv=
-*** SELinux
-**** DAS vs MAC
+* SELinux
+** DAS vs MAC
 - DAC: discretionary access control, in the sense that a /subject/
   with certain access permission is able to pass that permission,
   perhaps indirectly, on to another subject
@@ -773,12 +773,12 @@ Host *
   uid/gid is often too coarse. E.g. a CGI script launched by a web
   server will have security context of the web server and thus the
   same level of access to the system
-**** LSM
+** LSM
 - Linux Security Module, created as a shim between NSA SElinux and the
   rest of the kernel to give reusable abstraction
-**** AppArmor
+** AppArmor
 - an LSM (Linux sec module)
-**** SELinux
+** SELinux
 - goals: security administrator specifies policy, to be enforced by
   the kernel
   - policy allows the expected interactions within the system
@@ -804,7 +804,7 @@ Host *
   - =/selinux/avc=
   - =/selinux/booleans=
   - =/proc/pid/attr/*= - security context of the process
-**** Type Enforcement (TE) Security Model
+** Type Enforcement (TE) Security Model
 - every object (file, process, ...) is assigned a type label. A type
   applied to a process is called a domain. Security policy defines the
   allowed interaction between domains and types.
@@ -891,7 +891,7 @@ Host *
   - =ausearch -a report_number=
   - =sesearch --allow -s httpd_t -t httpd_sys_script_exec_t -p getattr -C=
   - toggle sebool back to on and observe CGI script run
-**** Examining Policy
+** Examining Policy
   - =seinfo=
   - =sesearch= to display policy statements matching a search
     - =sesearch -A -s httpd_t= will list all AV rules involving =httpd_t=
@@ -899,7 +899,7 @@ Host *
     - =sesearch -A -t shadow_t -c file -p write -C=
     - =sesearch -b allow_httpd_anon_write -A -C= what does =allow_httpd_anon_write= enable?
     - =sesearch -A -s httpd_t -c tcp_socket -p name_bind -C=  what ports can =httpd_t= bind to?
-**** SELinux Troubleshooting
+** SELinux Troubleshooting
 - =auditd= is your friend: =/var/log/audit/audit.log=
 - some denials are not logged due to =dontaudit= policy
   statements. Override with =semodule -DB= =semodule -b /usr/share/selinux/targeted/enableaudit.pp=
@@ -910,7 +910,7 @@ Host *
 - directories that need to be used by multiple services:
   =public_content_t=, =public_content_rw_t=
 - allow service to bind to alternative port with =semanage port -a -t httpd_port_t -p tcp 8080=
-**** audit2allow
+** audit2allow
 Lab: create x509 certificate for dovecot with wrong type,
 e.g. =httpd_sys_content_t=.
 - =tail /var/log/audit/audit.log=
@@ -930,7 +930,7 @@ e.g. =httpd_sys_content_t=.
 - =semodule -l | grep dovecotextra=
 - cleanup: =semodule -r dovecotextra=
 - proper fix: =chcon -t cert_t /path/to/x509/cert=
-**** Creating and Compiling policy from source
+** Creating and Compiling policy from source
 create policy module
 #+BEGIN_EXAMPLE
 policy_module(mypostfix_dovecot, 1.0)
@@ -955,7 +955,7 @@ create new file contexts file to make relabelling easier:
 =semodule -i mypostfix.pp=
 =semodule -l | grep mypostfix=
 =restorecon -v /etc/pki/dovecot/*/email.pem=
-*** audit
+* audit
 - what to audit
   - privileged operations
     - changing system time
@@ -1133,8 +1133,8 @@ create new file contexts file to make relabelling easier:
       =auditctl -a exit,always -F uid=1000 -S execve=
     - `match unlink syscall to filter deletions
       =auditctl -a exit,always -F uid=1000 -S unlink,unlinkat=
-*** Securing postgres
-**** SSL
+* Securing postgres
+** SSL
 - generate SSL keypair, sign the certificate.
 - place the certificate in =/var/lib/pgsql/data=
 - set =ssl = on= in =postgresql.conf=
@@ -1148,7 +1148,7 @@ create new file contexts file to make relabelling easier:
   - connect with =psql=
   - adjust SSL connection parameters: ciphers etc
   - disallow plain text connections in =pg_hba.conf=
-**** Access controls
+** Access controls
 - by default, no network connections allowed, so must be enabled with
   =listen_addresses = <list of ip addresses>= in =postgresql.conf=
 - =pg_hba= by default restricts access to local users: user can
@@ -1188,10 +1188,10 @@ create new file contexts file to make relabelling easier:
     - prepare keytab and require krb auth in =pg_hba.conf=:
       - =hostssl ALL ALL ALL ALL krb5=
     - reload postgres, and connect with =pgsql=
-**** Lab: pgsql as web app backing store
+** Lab: pgsql as web app backing store
 - =setsebool -P httpd_can_network_connect_db=1=
 - set up the database, dedicated user, password, and entry in =pg_hba.conf=
-*** Securing mail with GSSAPI
+* Securing mail with GSSAPI
 - postfix
   - crate =smtp= principal and add to keytab
     - if postfix is running chrooted, make sure the keytab is the
@@ -1210,7 +1210,7 @@ create new file contexts file to make relabelling easier:
   - create principal =imap/FQDN@REALM=
   - add =sasl_keytab: /etc/imap/krb5.keytab= and =sasl_mech_list:
     GSSAPI= to =/etc/imapd.conf=
-*** Securing Apache
+* Securing Apache
 - =httpd.conf=
   =AddHandler= to allow executing CGI programs
   Allow CGI in directories with =ExecCGI= option, e.g.
