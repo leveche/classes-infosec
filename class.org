@@ -955,3 +955,181 @@ create new file contexts file to make relabelling easier:
 =semodule -i mypostfix.pp=
 =semodule -l | grep mypostfix=
 =restorecon -v /etc/pki/dovecot/*/email.pem=
+*** audit
+- what to audit
+  - privileged operations
+    - changing system time
+    - tracing a process
+    - using raw sockets
+    - loading kernel modules
+  - security events
+    - SELinux AVC denials
+    - PAM config changes
+    - audit policy changes
+  - login/logout
+  - process creation
+  - file access
+- auditing login/logout
+  - =/var/log/lastlog=
+    - entry per user, showing last login time
+  - =/var/run/utmp=
+    - entry per terminal
+  - =/var/log/wtmp=
+    - history of who logged in and out
+    - =last= command
+  - =/var/log/btmp=
+    - history of bad login attempts
+    - =lastb=
+- bash history
+  - =chattr +x ~user/bash_history=
+  - timestamp with HISTTIMEFORMAT
+  - HISTFILESIZE, HISTSIZE
+- psacct package
+  - doesn't record process arguments
+  - does not log until process finishes
+- sudo logs
+- kernel auditing
+  - meets sec standards CAPP, LSPP, RBAC, NISPOM, FISMA, PCI, DCID 6/3
+  - calls by a thread with auditable flag set are passed to the audit
+    subsystem
+  - =audit=1= option to kernel at boot time will make all processes
+    inherit the auditable flag
+  - audit records filtered before being passed to userspace
+      #+BEGIN_SRC dot :cache yes :file tmp/a.png :cmdline -Kdot -Tpng -Gdpi=64
+      digraph G {
+          subgraph clusterKnlAudit {
+            rankdir=LR
+            "System Calls" -> "Exit"
+            "System Calls" -> "Task"
+            "Task" -> "System Calls"
+            "Exit" -> "Exclude"
+            "User" -> "Exclude"
+            "Exclude" -> "Task"
+            "kernel audit subsystem"
+          }
+          "Exit" -> "Application"
+          "Application" -> "System Calls"
+          "Application" -> "User"
+          "kernel audit subsystem" -> "auditd"
+          "auditd" -> "audisp"
+          "auditd" -> "audit.log"
+        }
+      #+END_SRC
+
+      #+RESULTS[2151b2b2167151eabc7a88828c17b53cd6e3ca95]:
+      [[file:tmp/a.png]]
+
+    - =exit=
+      - checked at =exit(2)=
+    - =task=
+      - checked at =forc(2)= or =clone(2)=
+    - =user=
+    - =exclude=
+      - suppress audit records
+  - =auditd= picks up the filtered messages, appends them to audit
+    log, and notiifies event dispatcher =audispd=
+    - sample STIG-compliant config
+      #+BEGIN_EXAMPLE
+        log_file = /var/log/audit/audit.log
+        log_format = RAW
+        flush = SYNC
+        disp_qos = lossless
+        dispatcher = /sbin/audispd
+        max_log_file = 1000
+        max_log_file_action = KEEP_LOGS
+        space_left = 75
+        space_left_action = SYSLOG
+        action_mail_acct = root
+        admin_space_left = 50
+        admin_space_left_action = EMAIL
+        disk_full_action = SINGLE
+        disk_error_action = HALT
+      #+END_EXAMPLE
+  - controlling the audit subsystem
+    - =auditctl -s= to show current state
+    - =auditctl -m message= injects a message
+    - flags:
+      - -e=0/1/2: disable/endable/lock audit config
+      - -f=2: force kernel panic on critical error in audit system
+      - -r num: rate limit, triggers critical error when exceeded
+    - loading rules:
+      - =auditctl -R /path/to/file.rules=
+      - =auditctl -l -k user_defined_key= to list rules matching the key
+  - creating audit rules
+    - =auditctl -a list,action= prepend new system call rule to list
+    - =-A list,action= append new system call rule to list
+    - =-d list,action= delete the audit rule
+    - =-D= delete all audit rules
+    - =-w /path/to/file= add a file to watch
+    - =-W /apth/to/file= no longer watch the file
+  - syscall audit rules
+    - =auditctl -a exit,always -S all -F pid=pid=
+      - audit all system calls made py a process
+    - =auditctl -a exit,always -S open -F auid=uid=
+      - all files opened by user
+    - =auditctl -a exit,always, -S unlink -S unlikat -S rename -S
+      renameat -S link -S linkat -S symlink -F auid=uid uid=0=
+      - attempts to delete, move, or symlink files by a user who
+        changed to root
+    - =auditctl -a exit,always -S mkdirat -S mkdir -S rmdir -F success=0=
+      - failed attempts to create or delete directories
+    - =auditctl -a exit,always -S EXECVE -F "uid>=500" -F "uid<=1000" -F "uid!=703"=
+      - all processes started by uids between 500 and 1000, but not 703.
+  - filesystem audit rules
+    - =auditclt -w /etc/ -p wa=
+    - =find /sbin -type f -perm +111 -exec auditctl -w {} -p a \;=
+    - =auditctl -a exit,always -F dir=/etc -F perm=r -F "aiud>=500"=
+      - reads of config files by non-system users
+    - =auditctl -a exit,always -F dir=/var/www -F perm=w -F obj_type=httpd_sys_script_exec_t=
+  - filtering record types with exlude
+    - suppress SELinux AVC audit messages
+      - =auditctl -a exclude,always -F msgtype=AVC=
+  - searching audit logs
+    - =ausearch -tm tty1 -m USER_START -m USER_END=
+      - start and end of user sessions on =tty1=
+    - =ausearch --start this-week --raw --uid-all 500 > /tmp/uid500_audit.log=
+    - =ausearch --message PATH --interpret --success no --syscall open --loginuid 500=
+  - audit reports
+    - =aureport=
+    - =aureport -l --failed=
+  - combining =ausearch= and =aureport=
+    - =aureport -k --summary=
+    - =ausearch -k access | aureport -f --summary=
+    - =ausearch -k access -f /path/to/file | aureport -u -i=
+  - failed auth events
+    =aureport --summary | grep logins=
+    =aureport -l --failed -ts recent=
+    =ausearch -a XXX=
+    =ausearch -m USER_AUTH | grep user1=
+    =auserarch -p pid -m USER_START,USER_END=
+    =aureport --summary | grep logins=
+  - auditing file access
+    =auditctl -w /path/to/file -k=
+    - add files to watch
+      =auditctl -w /path/to/dir -k audit1_dir=
+      =auditctl -l=
+      - show all audit events associated with =/path/to/dir=:
+        =ausearch -k audit1_dir -m PATH | grep ^time=
+      - show audit records associated with appending data to file
+        =ausearch -k audit1_dir -f append -i=
+        results include
+        - pointer to the string containing the file name (already
+          decoded in the =PATH= audit record) in =a0=
+        - flags to =open(2)= syscall in =a1=
+          - lookup the flags: e.g. =a1=0x8441=:
+            =echo "ibase=16; obase=8; 8441" | bc= -> 102101
+            =egrep '\<0(100000|2000|100|1)\>' /usr/include/bits/fcntl.h=
+        - effective uid in =a2=
+  - all file events in the audit log: =aureport -f -i=
+  - auditing command execution:
+    - rule to log attempts to execute
+      =/bin/rm= by =user1= =auditctl -a exit,always -F path=/bin/rm -F
+      perm=x -F uid=1000 -k delete= can be easily evaded by user
+      creating their own copy of /bin/rm, unless all user-writable file
+      systems are mounted =noexec=. also, other commands can remove a
+      file. Also, linker can be used to run the file, which will execute
+      the linker, not the target executable: =/bin/ld-linux.so.2 /bin/rm /path/to/file=
+    - rule to match all executions by =user1= match on syscall
+      =auditctl -a exit,always -F uid=1000 -S execve=
+    - `match unlink syscall to filter deletions
+      =auditctl -a exit,always -F uid=1000 -S unlink,unlinkat=
