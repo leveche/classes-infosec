@@ -1,0 +1,78 @@
+#+title: Sicherheit im Internet
+* KE1
+** 2014 SS KE1 Aufgabe 1
+An welchen Stellen eines Systems ist die Sicherheit gefährdet,
+bzw. welche Teile können Ziele von Angriffen sein? Beschreiben Sie
+kurz, welche Schäden ein Angreifer anrichten kann.
+ - Eigentich jede Komponente eines Systems kann angegriffen
+   werden. Grob geteilt, kann man folgende Angriffsziele
+   unterscheiden:
+   - Computer (Host)
+   - Netzwerk ("Data in Motion")
+   - Daten ("Data at Rest")
+ - (Wiederum eine grobe) Unterteilung der potenziellen Schäden:
+   - Verlust der Integrität:
+     - Unbefugte Modifikation der Daten.
+     - Unbefugte Erzeugung von Nachrichten.
+   - Datenverlust: Eine unbefugte Modifikation, die die Daten löscht
+     oder unbrauchbar macht.
+   - Verlust der Geheimlichkeit: Unbefugter Informationsgewinn
+   - Verlust der Verfügbarkeit (Denial of Service): unbefugte
+     Dienstunterbrechung.
+** 2014 SS KE1 Aufgabe 4 : Was verteht man unter Steganographie?
+Steganographie ist eine Art der Nachrichtenübertragung, bei der es
+versucht wird, die Existenz der Nachricht zu verbergen. So kann man
+z.B. eine Textzeile als fürs menschliche Auge unwesentliche
+Variationen der Pixelfarbe in einem Fotobild kodieren.
+** 2014 SS KE1 Aufgabe 5
+Erklären Sie, warum Sie eine Email empfangen können, deren Empfänger
+nicht Sie selbst sind. Ihr Email-Programm zeigt also an, daß die Email
+z.B. an hans.mustermann adressiert ist. Tatsächlich liegt die Email
+aber in ihrem Postkorb.
+- Es kann verschiedene Grunde geben:
+  - Punkt 3.4 des RFC 2822 gibt eine mögliche Angabe der Email-Adresse
+    als display-name < addr-spec >, also ist "hans.mustermann
+    <test@test.ORG>" eine vollkomen korrekte Adresse ist, die
+    meinsten MUAs werden den Adressat einfach als "hans.mustermann"
+    anzeigen.
+  - RFC 2822 sieht ausserdem ( im Punkt 3.6.3 ) "cc" und "bcc" Felder
+    vor. Es kann also sein, dass ich ein (möglicherweise geheimer)
+    Mitempfänger einer Nachricht bin.
+  - Das MTA kann mit 'virtual mailboxes' konfiguriert werden;
+    z.B. alle Nachrichten an hans.mustermann@example.com werden in den
+    Postfach example@example.com zugestellt.
+* KE2: Verschlüsselung und digitale Signaturen
+** Secret-Key Verschlüsselung
+*** Moderne Verschlüsselingsalgorythmen
+**** 2014 SS KE2 Aufgabe 1
+Gegeben ist folgende Variante eines
+Feistel-Verschlüsselungsalgorithmus: Die Funktion F ist definiert als
+\( F(S_i,R_i) = 11111111111111111111111111111111 \) Es werden 12
+Runden durchgeführt. Die Rundenschlüssel werden wie bei DES generiert.
+Funktioniert die Verschlüsselung und die Entschlüsselung (so wie im
+Kurstext beschrieben) noch? Begründen Sie Ihre Antwort.
+*** AES
+** Public-Key-Verschlüsselung
+*** Prinzip
+*** Verschlüsselingsalgorythmen
+** Hashfunktionen
+*** Prinzip
+*** Hash-Algorythmen
+** MACs und digitale Signaturen
+*** Digitale Signaturen
+*** Algorythmen für digitale Signaturen
+** Zertifikate und Schlüsselmanagent
+*** Zertifikate
+*** Schlüsselmanagement
+*** PKI
+* KE3: Benutzersicherheit im Internet
+** Sichere Mail
+** PGP
+** S-MIME
+* KE4: Anbietersicherheit im Internet
+** Firewalls
+** Organisatorische Sichercheitsmaßnahmen
+** IT-Sicherheitsstandards
+** Der IT-Sicherheitsprozess
+** Die IT-Sicherheitskonzepzion
+** Eine IT-Sicherheitsorganisation
