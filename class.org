@@ -1383,3 +1383,28 @@ create new file contexts file to make relabelling easier:
   - Red Book - TNI
   - Green Book - DoD Passwd Management
   - Dark Green Book
+* C|EH v7
++ common SOA vilnerabilities
++ span port on switch
++ cross-site scripting
++ apache mod_negotiation - file extension
++ man nslookup
++ smurf attack
++ broadcast ping
++ google search hacks
++ ping of death
++ EAP - extensible authentication protocol - smartcards
++ metaspoit, nessus, nmap, tcpdump, wireshark
++ snort; ossec; tripwire
++ session hijack attack
++ syskey w2k8
++ XMAS scan
++ tcp seq # prediction
++ protect ag ARP poisoning - dhcp snoop table, dynm arp isp
++ WPA2 CCMP
++ OWASP, webgoat
++ PCI requirement 11
++ LM hash
++ swith CAM table
++ hping2
++ OSSTMM
