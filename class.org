@@ -1364,8 +1364,22 @@ create new file contexts file to make relabelling easier:
       - enable krb authentication in Firefox
         - =about:config= or edit =prefs.js=
           - =network.negotiate-auth.trusted-uris= <- ='example.com'=
-*** HIDS
+* HIDS
 - rpm
 =rpm -Va=
 =rpm -V package_name=
 - AIDE
+
+* CISSP
++ Security Architecture
+  - Bell-LaPadula Model
+    - Basic Security Theorem
+  - Clark-Wilson Model
+  - Biba Model
+  - RBAC
++ Kerberos/SESAME/GSSAPI
++ Architecture Evaluation Criteria
+  - Orange Book
+  - Red Book - TNI
+  - Green Book - DoD Passwd Management
+  - Dark Green Book
